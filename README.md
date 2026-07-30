@@ -12,6 +12,7 @@ Auditoria técnica de SEO com inteligência artificial. Crawleia seu site, execu
 | **Google Search Console** | Importa dados reais de cliques, impressões, CTR e posição dos últimos 28 dias |
 | **PageSpeed Insights** | Scores Lighthouse (Performance, Acessibilidade, Boas Práticas, SEO) para mobile e desktop |
 | **Dashboard interativo** | Servidor local com cards de score, gráficos de severidade, análise DeepSeek estruturada em cards com ícones, filtros e busca |
+| **Persistência automática** | Após cada auditoria o relatório completo é salvo em `data/last-report.json`. Reabra o dashboard sem re-auditar com `serve` |
 | **Correções automáticas** | Peça ao DeepSeek para gerar correções específicas para qualquer problema encontrado |
 | **Watch mode** | Re-audite em intervalo configurável com dashboard atualizado automaticamente |
 
@@ -60,7 +61,7 @@ Commands:
   analyze Análise detalhada de uma única página com DeepSeek
   fix     Gerar correção para um problema específico
   suggest Sugestões de melhoria para uma página
-  serve   Servir um relatório existente como dashboard
+  serve   Reabrir o dashboard do último relatório salvo (ou de um arquivo específico)
   watch   Crawlear + auditar + servir dashboard continuamente
 ```
 
@@ -88,6 +89,12 @@ npx tsx src/index.ts audit https://meusite.com.br --sitemap -p 200 -s
 # (configure .env primeiro)
 npx tsx src/index.ts audit https://meusite.com.br -p 50 --serve
 
+# Reabrir o último dashboard sem re-auditar (carrega de data/last-report.json)
+npx tsx src/index.ts serve
+
+# Reabrir dashboard a partir de um arquivo específico
+npx tsx src/index.ts serve data/last-report.json
+
 # Watch mode: re-audita a cada 30 minutos
 npx tsx src/index.ts watch https://meusite.com.br --interval 30
 
@@ -100,7 +107,14 @@ npx tsx src/index.ts analyze https://meusite.com.br/contato
 
 ## Dashboard Interativo
 
-Quando usado com a flag `-s` ou `--serve`, o SEO Audit inicia um servidor HTTP local com um dashboard completo:
+Após cada auditoria com `audit` ou `watch`, o relatório completo é salvo automaticamente em `data/last-report.json`. Para reabrir o dashboard depois sem re-auditar, use `npx tsx src/index.ts serve`.
+
+O dashboard pode ser iniciado de duas formas:
+
+- **Direto da auditoria** — com a flag `-s` ou `--serve` ao final do audit
+- **De um relatório salvo** — com o comando `serve` (com ou sem argumento)
+
+Quando ativo, o servidor local exibe:
 
 - **Score card** — SEO Score com barra de progresso colorida
 - **PageSpeed card** — Scores Lighthouse (mobile/desktop) para Performance, Acessibilidade, Boas Práticas e SEO
@@ -115,11 +129,21 @@ Quando usado com a flag `-s` ou `--serve`, o SEO Audit inicia um servidor HTTP l
 | Variável | Obrigatório | Descrição |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | ✅ Sim | Sua chave da API DeepSeek |
-| `GOOGLE_APPLICATION_CREDENTIALS` | ❌ Não | Caminho para o JSON da service account do Google Search Console |
-| `PAGE_SPEED_API_KEY` | ❌ Não | Chave da API PageSpeed Insights (https://developers.google.com/speed/docs/insights/v5/get-started) |
-| `DEEPSEEK_MODEL` | ❌ Não | Modelo DeepSeek (default: `deepseek-chat`) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | ✅ Sim | Caminho para o JSON da service account do Google Search Console |
+| `PAGE_SPEED_API_KEY` | ✅ Sim | Chave da API PageSpeed Insights (https://developers.google.com/speed/docs/insights/v5/get-started) |
+| `DEEPSEEK_MODEL` | ✅ Sim | Modelo DeepSeek (default: `deepseek-chat`) |
 | `MAX_CRAWL_PAGES` | ❌ Não | Máximo de páginas por crawl (default: `1000`) |
 | `SAC_DATA_DIR` | ❌ Não | Diretório para dados (default: `./data`) |
+
+## DeepSeek: Data Aggregation + Prompt Engineering
+
+O DeepSeek não utiliza RAG (Retrieval-Augmented Generation). Em vez disso, a aplicação usa **data aggregation + prompt engineering**:
+
+1. **Agregação**: os dados são coletados de 3 fontes distintas (crawler, Google Search Console e PageSpeed Insights) via chamadas de API determinísticas
+2. **Prompt estruturado**: todo o conteúdo é concatenado em um único prompt com seções fixas (Resumo Executivo, Problemas Críticos, SEO On-Page, Saúde Técnica, Conteúdo, Correções Priorizadas)
+3. **Análise completa**: o modelo recebe todos os dados de uma vez e gera o relatório em pt-BR
+
+Não há indexação vetorial, busca por similaridade ou banco de dados de embeddings — tudo é enviado no contexto do modelo.
 
 ## Arquitetura
 
@@ -138,8 +162,9 @@ src/
 │   └── client.ts         # Integração Google Search Console API
 ├── pagespeed/
 │   └── client.ts         # Integração PageSpeed Insights API
+├── persist.ts           # Persistência do relatório em data/last-report.json
 ├── server/
-│   ├── index.ts          # Servidor HTTP
+│   ├── index.ts          # Servidor HTTP (com endpoint /api/report)
 │   └── dashboard.ts      # Geração do HTML do dashboard (Tailwind CSS via CDN)
 └── utils/
     └── index.ts          # Utilitários de formatação

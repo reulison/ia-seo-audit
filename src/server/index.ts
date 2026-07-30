@@ -1,7 +1,6 @@
 import http from 'http'
 import url from 'url'
-import fs from 'fs/promises'
-import path from 'path'
+import { loadReport } from '../persist.js'
 
 interface ServerOptions {
   port: number
@@ -30,9 +29,14 @@ export function startServer(options: ServerOptions): Promise<http.Server> {
       }
 
       if (pathname === '/api/report') {
-        const reportData = html
-        res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ size: reportData.length, generated: new Date().toISOString() }))
+        const report = loadReport()
+        if (report) {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify(report))
+        } else {
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'No saved report found' }))
+        }
         return
       }
 

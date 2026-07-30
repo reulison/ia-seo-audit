@@ -14,10 +14,11 @@ import {
 import { fetchGscData, formatGscSummary } from './gsc/client.js'
 import { runPageSpeed, formatPageSpeedSummary } from './pagespeed/client.js'
 import { formatReportMarkdown } from './utils/index.js'
-import { generateDashboardFromFindings } from './server/dashboard.js'
+import { generateDashboard, generateDashboardFromFindings } from './server/dashboard.js'
 import { startServer, printServerInfo } from './server/index.js'
-import { AuditFinding } from './types.js'
+import { AuditFinding, AuditReport } from './types.js'
 import { config } from './config.js'
+import { saveReport, loadReport } from './persist.js'
 
 const program = new Command()
 
@@ -184,6 +185,25 @@ program
       analysis = `*DeepSeek analysis failed: ${err}*`
     }
 
+    const auditReport: AuditReport = {
+      url,
+      timestamp: new Date().toISOString(),
+      summary: {
+        totalPages: pages.length,
+        criticalIssues: critical,
+        highIssues: high,
+        mediumIssues: medium,
+        lowIssues: low,
+        overallScore: score,
+      },
+      findings: prioritized,
+      deepseekAnalysis: analysis,
+      pagespeed: pagespeedScores,
+    }
+
+    const savedPath = saveReport(auditReport)
+    console.log(chalk.gray(`  Report saved to ${savedPath}`))
+
     const report = formatReportMarkdown(url, pages.length, prioritized, score, analysis)
 
     if (options.output) {
@@ -232,7 +252,7 @@ program
 
     if (options.serve) {
       const port = parseInt(options.port, 10)
-      const dashboardHtml = generateDashboardFromFindings(url, prioritized, pages.length, score, analysis, pagespeedScores)
+      const dashboardHtml = generateDashboard(auditReport)
       const server = await startServer({ port, html: dashboardHtml })
       printServerInfo(port)
     }
@@ -347,30 +367,32 @@ program
 
 program
   .command('serve')
-  .description('Serve an existing report as a local dashboard')
-  .argument('<file>', 'Path to audit report (.md or .json)')
+  .description('Serve the last audit dashboard (or load from file)')
+  .argument('[file]', 'Path to audit report JSON (uses last saved report if omitted)')
   .option('--port <number>', 'Server port', '3456')
-  .action(async (file: string, options) => {
+  .action(async (file: string | undefined, options) => {
     const port = parseInt(options.port, 10)
-    const fs = await import('fs/promises')
-    const content = await fs.readFile(file, 'utf-8')
 
-    const report = {
-      url: 'unknown',
-      timestamp: new Date().toISOString(),
-      summary: { totalPages: 0, criticalIssues: 0, highIssues: 0, mediumIssues: 0, lowIssues: 0, overallScore: 0 },
-      findings: [],
-      deepseekAnalysis: content,
+    let report: AuditReport
+
+    if (file) {
+      const fs = await import('fs/promises')
+      const content = await fs.readFile(file, 'utf-8')
+      report = JSON.parse(content) as AuditReport
+      console.log(chalk.green(`\n✓ Report loaded from: ${file}`))
+    } else {
+      const saved = loadReport()
+      if (!saved) {
+        console.log(chalk.red('\n⚠ No saved report found.'))
+        console.log(chalk.yellow('  Run an audit first:'))
+        console.log(chalk.cyan('  npx tsx src/index.ts audit <url> --serve\n'))
+        process.exit(1)
+      }
+      report = saved
+      console.log(chalk.green(`\n✓ Last audit loaded (${new URL(report.url).hostname}, ${report.summary.totalPages} pages)`))
     }
 
-    const dashboardHtml = generateDashboardFromFindings(
-      report.url,
-      report.findings,
-      report.summary.totalPages,
-      report.summary.overallScore,
-      report.deepseekAnalysis
-    )
-
+    const dashboardHtml = generateDashboard(report)
     const server = await startServer({ port, html: dashboardHtml })
     printServerInfo(port)
   })
@@ -422,8 +444,24 @@ program
           )
         : '*DeepSeek analysis not available*'
 
-      const html = generateDashboardFromFindings(url, prioritized, pages.length, score, analysis, pagespeedScores)
-      return html
+      const report: AuditReport = {
+        url,
+        timestamp: new Date().toISOString(),
+        summary: {
+          totalPages: pages.length,
+          criticalIssues: prioritized.filter((f) => f.severity === 'critical').length,
+          highIssues: prioritized.filter((f) => f.severity === 'high').length,
+          mediumIssues: prioritized.filter((f) => f.severity === 'medium').length,
+          lowIssues: prioritized.filter((f) => f.severity === 'low').length,
+          overallScore: score,
+        },
+        findings: prioritized,
+        deepseekAnalysis: analysis,
+        pagespeed: pagespeedScores,
+      }
+
+      saveReport(report)
+      return generateDashboard(report)
     }
 
     const html = await runAuditAndServe()
