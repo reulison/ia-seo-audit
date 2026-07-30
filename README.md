@@ -180,6 +180,11 @@ src/
     └── index.ts          # Utilitários de formatação
 ```
 
+### Visulizar
+
+- [SEO Audit](/public/seo-audit.pdf "SEO Audit")
+- [SEO Keywords](/public/seo-keywords.pdf "SEO Keywords")
+
 ## License
 
 Source-available. Free for personal and educational use.
