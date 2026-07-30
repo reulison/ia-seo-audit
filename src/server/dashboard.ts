@@ -116,12 +116,15 @@ export function generateDashboard(report: AuditReport): string {
     categories[f.category].push(f)
   }
 
-  const findingsJson = JSON.stringify(
+  const findingsEncoded = encodeURIComponent(JSON.stringify(
     findings.map((f) => ({
       ...f,
       fix: f.fix || '',
     }))
-  )
+  ))
+
+  const kwrdsEncoded = encodeURIComponent(JSON.stringify(report.kwrds || []))
+  const dataforseoEncoded = encodeURIComponent(JSON.stringify(report.dataforseo || []))
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -271,6 +274,8 @@ body { font-family: 'Inter', sans-serif; }
       <button class="tab-btn px-5 py-2.5 rounded-lg font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="categories">📁 Por Categoria</button>
       <button class="tab-btn px-5 py-2.5 rounded-lg font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="pages">📄 Por Página</button>
       <button class="tab-btn px-5 py-2.5 rounded-lg font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="deepseek">🤖 IA Análise</button>
+      ${report.kwrds?.length ? '<button class="tab-btn px-5 py-2.5 rounded-lg font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="kwrds">📊 Keywords</button>' : ''}
+      ${report.dataforseo?.length ? '<button class="tab-btn px-5 py-2.5 rounded-lg font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="dataforseo">🔑 Keywords Relacionadas</button>' : ''}
     </div>
 
     <!-- Tab: Findings -->
@@ -406,10 +411,213 @@ body { font-family: 'Inter', sans-serif; }
         ${deepseekHtml}
       </div>
     </div>
+
+    <!-- Tab: Keywords Research -->
+    ${report.kwrds?.length ? `
+    <div id="tab-kwrds" class="tab-content hidden">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-2xl">📊</span>
+        <div>
+          <h3 class="font-bold text-lg text-gray-900">Keywords</h3>
+          <p class="text-sm text-gray-400">Volume de busca, CPC e concorrência das queries do GSC via DataForSEO</p>
+        </div>
+      </div>
+
+      ${report.kwrds.map((q, qi) => `
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
+        <div class="flex items-center justify-between cursor-pointer" onclick="toggleCard('kwrds', ${qi})">
+          <div class="flex items-center gap-3">
+            <span class="text-lg">🔍</span>
+            <div>
+              <h4 class="font-bold text-gray-900">${q.query}</h4>
+              <div class="flex gap-3 text-xs text-gray-400 mt-0.5">
+                <span>${q.gsc.clicks} cliques</span>
+                <span>${q.gsc.impressions.toLocaleString()} impressões</span>
+                <span>CTR ${q.gsc.ctr.toFixed(1)}%</span>
+                <span>Pos. ${q.gsc.position.toFixed(1)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-xs font-medium">${q.keywords.length} palavras</span>
+            <span id="kwrds-arrow-${qi}" class="text-gray-400 transition-transform">▼</span>
+          </div>
+        </div>
+        <div id="kwrds-body-${qi}" class="mt-4 hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-gray-50">
+                  <th class="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wide">Palavra-chave</th>
+                  <th class="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide">Volume</th>
+                  <th class="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide">CPC</th>
+                  <th class="px-3 py-2 text-center font-semibold text-gray-500 uppercase tracking-wide">Intenção</th>
+                  <th class="px-3 py-2 text-center font-semibold text-gray-500 uppercase tracking-wide">Competição</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${q.keywords.map(k => {
+                  const compColor = k.competitionValue === 'HIGH' ? 'text-red-600 bg-red-50' : k.competitionValue === 'MEDIUM' ? 'text-yellow-600 bg-yellow-50' : 'text-green-600 bg-green-50'
+                  const intentColors: Record<string, string> = {
+                    Informational: 'bg-blue-50 text-blue-600',
+                    Commercial: 'bg-purple-50 text-purple-600',
+                    Transactional: 'bg-green-50 text-green-600',
+                    Navigational: 'bg-orange-50 text-orange-600',
+                  }
+                  const intentColor = intentColors[k.searchIntent] || 'bg-gray-50 text-gray-600'
+                  return `
+                <tr class="border-t border-gray-100 hover:bg-gray-50">
+                  <td class="px-3 py-2 font-medium text-gray-900">${k.keyword}</td>
+                  <td class="px-3 py-2 text-right tabular-nums text-gray-700">${k.volume.toLocaleString()}</td>
+                  <td class="px-3 py-2 text-right tabular-nums text-gray-700">${k.cpc > 0 ? '$' + k.cpc.toFixed(2) : '-'}</td>
+                  <td class="px-3 py-2 text-center"><span class="${intentColor} px-2 py-0.5 rounded text-xs font-medium">${k.searchIntent}</span></td>
+                  <td class="px-3 py-2 text-center"><span class="${compColor} px-2 py-0.5 rounded text-xs font-medium">${k.competitionValue}</span></td>
+                </tr>`
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>`).join('')}
+
+      <!-- Generate article topics -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mt-4">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h4 class="font-bold text-gray-900">📝 Temas de Artigos</h4>
+            <p class="text-sm text-gray-400">Gere sugestões de artigos baseadas nas palavras-chave</p>
+          </div>
+          <button onclick="generateTopics('kwrds')" id="genTopicsBtn-kwrds" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+            <span>✨</span>
+            <span>Gerar Temas</span>
+          </button>
+        </div>
+        <div id="topicsResult-kwrds" class="hidden">
+          <div class="flex items-center gap-2 text-sm text-gray-500 mb-3" id="topicsLoading-kwrds">
+            <div class="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+            <span>Gerando temas com DeepSeek...</span>
+          </div>
+          <div id="topicsContent-kwrds" class="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-strong:text-gray-900 prose-table:text-xs prose-table:border prose-table:border-gray-200 prose-th:bg-gray-50 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-1.5 prose-td:border prose-td:border-gray-200"></div>
+        </div>
+      </div>
+    </div>` : ''}
+
+    <!-- Tab: DataForSEO Keywords Relacionadas -->
+    ${report.dataforseo?.length ? `
+    <div id="tab-dataforseo" class="tab-content hidden">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-2xl">🔑</span>
+        <div>
+          <h3 class="font-bold text-lg text-gray-900">Keywords Relacionadas</h3>
+          <p class="text-sm text-gray-400">Palavras-chave relacionadas via DataForSEO</p>
+        </div>
+      </div>
+
+      <!-- Live search input -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+        <div class="flex gap-3">
+          <input id="relatedSearchInput" type="text" placeholder="Digite uma palavra-chave para buscar..." class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <button onclick="searchRelatedKeywords()" id="relatedSearchBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+            <span>🔍</span>
+            <span>Buscar</span>
+          </button>
+        </div>
+        <div id="relatedSearchResult" class="hidden mt-4"></div>
+      </div>
+
+      ${report.dataforseo.map((q, qi) => `
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
+        <div class="flex items-center justify-between cursor-pointer" onclick="toggleCard('dataforseo', ${qi})">
+          <div class="flex items-center gap-3">
+            <span class="text-lg">🔍</span>
+            <h4 class="font-bold text-gray-900">${q.query}</h4>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="bg-purple-50 text-purple-600 px-2 py-0.5 rounded text-xs font-medium">${q.keywords.length} keywords</span>
+            <span id="dataforseo-arrow-${qi}" class="text-gray-400 transition-transform">▼</span>
+          </div>
+        </div>
+        <div id="dataforseo-body-${qi}" class="mt-4 hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-xs border-collapse">
+              <thead>
+                <tr class="bg-gray-50">
+                  <th class="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wide">Palavra-chave</th>
+                  <th class="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide">Volume</th>
+                  <th class="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide">CPC</th>
+                  <th class="px-3 py-2 text-center font-semibold text-gray-500 uppercase tracking-wide">Intenção</th>
+                  <th class="px-3 py-2 text-center font-semibold text-gray-500 uppercase tracking-wide">Competição</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${q.keywords.map(k => {
+                  const compColor = k.competitionValue === 'HIGH' ? 'text-red-600 bg-red-50' : k.competitionValue === 'MEDIUM' ? 'text-yellow-600 bg-yellow-50' : k.competitionValue === 'LOW' ? 'text-green-600 bg-green-50' : 'text-gray-600 bg-gray-50'
+                  const intentColors: Record<string, string> = {
+                    informational: 'bg-blue-50 text-blue-600',
+                    commercial: 'bg-purple-50 text-purple-600',
+                    transactional: 'bg-green-50 text-green-600',
+                    navigational: 'bg-orange-50 text-orange-600',
+                  }
+                  const intentLabel: Record<string, string> = {
+                    informational: 'Informacional',
+                    commercial: 'Comercial',
+                    transactional: 'Transacional',
+                    navigational: 'Navegacional',
+                  }
+                  const intentKey = (k.searchIntent || '').toLowerCase()
+                  const intentColor = intentColors[intentKey] || 'bg-gray-50 text-gray-600'
+                  const intentDisplay = intentLabel[intentKey] || k.searchIntent || '-'
+                  return `
+                <tr class="border-t border-gray-100 hover:bg-gray-50">
+                  <td class="px-3 py-2 font-medium text-gray-900">${k.keyword}</td>
+                  <td class="px-3 py-2 text-right tabular-nums text-gray-700">${k.volume > 0 ? k.volume.toLocaleString() : '-'}</td>
+                  <td class="px-3 py-2 text-right tabular-nums text-gray-700">${k.cpc > 0 ? '$' + k.cpc.toFixed(2) : '-'}</td>
+                  <td class="px-3 py-2 text-center"><span class="${intentColor} px-2 py-0.5 rounded text-xs font-medium">${intentDisplay}</span></td>
+                  <td class="px-3 py-2 text-center"><span class="${compColor} px-2 py-0.5 rounded text-xs font-medium">${k.competitionValue || '-'}</span></td>
+                </tr>`
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>`).join('')}
+
+      <!-- Generate article topics -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mt-4">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h4 class="font-bold text-gray-900">📝 Temas de Artigos</h4>
+            <p class="text-sm text-gray-400">Gere sugestões de artigos baseadas nas keywords relacionadas</p>
+          </div>
+          <button onclick="generateTopics('dataforseo')" id="genTopicsBtn-dataforseo" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+            <span>✨</span>
+            <span>Gerar Temas</span>
+          </button>
+        </div>
+        <div id="topicsResult-dataforseo" class="hidden">
+          <div class="flex items-center gap-2 text-sm text-gray-500 mb-3" id="topicsLoading-dataforseo">
+            <div class="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+            <span>Gerando temas com DeepSeek...</span>
+          </div>
+          <div id="topicsContent-dataforseo" class="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-strong:text-gray-900 prose-table:text-xs prose-table:border prose-table:border-gray-200 prose-th:bg-gray-50 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-1.5 prose-td:border prose-td:border-gray-200"></div>
+        </div>
+      </div>
+    </div>` : ''}
   </main>
 
   <script>
-  const findings = ${findingsJson}
+  const findings = JSON.parse(decodeURIComponent(\`${findingsEncoded}\`))
+  const kwrds = JSON.parse(decodeURIComponent(\`${kwrdsEncoded}\`))
+  const dataforseo = JSON.parse(decodeURIComponent(\`${dataforseoEncoded}\`))
+
+  function toggleCard(prefix, i) {
+    const body = document.getElementById(prefix + '-body-' + i)
+    const arrow = document.getElementById(prefix + '-arrow-' + i)
+    if (!body || !arrow) return
+    const isHidden = body.classList.contains('hidden')
+    body.classList.toggle('hidden')
+    arrow.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)'
+  }
 
   function renderFindings(list, filter = 'all', search = '') {
     const filtered = list.filter(f => {
@@ -476,6 +684,125 @@ body { font-family: 'Inter', sans-serif; }
   function getSeverityBg(s) { return { critical: '#fef2f2', high: '#fff7ed', medium: '#fefce8', low: '#f0fdf4', info: '#eff6ff' }[s] || '#f9fafb' }
   function getSeverityText(s) { return { critical: '#dc2626', high: '#ea580c', medium: '#ca8a04', low: '#16a34a', info: '#2563eb' }[s] || '#374151' }
 
+  function escapeHtml(text) {
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
+  }
+
+  // Generate article topics from keyword data
+  function generateTopics(source) {
+    const btn = document.getElementById('genTopicsBtn-' + source)
+    const resultDiv = document.getElementById('topicsResult-' + source)
+    const contentDiv = document.getElementById('topicsContent-' + source)
+    const loadingDiv = document.getElementById('topicsLoading-' + source)
+    const data = source === 'dataforseo' ? dataforseo : kwrds
+
+    btn.disabled = true
+    btn.innerHTML = '<div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div><span>Gerando...</span>'
+    resultDiv.classList.remove('hidden')
+    loadingDiv.classList.remove('hidden')
+    contentDiv.innerHTML = ''
+
+    fetch('/api/topics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+      .then(r => r.json())
+      .then(r => {
+        loadingDiv.classList.add('hidden')
+        if (r.success) {
+          const html = r.result.split('\\n').map(line => {
+            const safe = escapeHtml(line)
+            if (line.startsWith('#')) {
+              const level = line.match(/^#+/)[0].length
+              const text = escapeHtml(line.replace(/^#+\s*/, ''))
+              const size = level === 1 ? 'text-xl font-bold mt-4 mb-2' : level === 2 ? 'text-lg font-bold mt-3 mb-1' : 'text-base font-semibold mt-2 mb-1'
+              return '<div class="' + size + '">' + text + '</div>'
+            }
+            if (line.startsWith('- ')) return '<li class="ml-4 text-sm leading-relaxed">' + escapeHtml(line.slice(2)) + '</li>'
+            if (line.trim() === '') return '<br>'
+            return '<p class="text-sm leading-relaxed">' + safe + '</p>'
+          }).join('\\n')
+          contentDiv.innerHTML = html
+        } else {
+          contentDiv.innerHTML = '<div class="text-red-600 text-sm">Erro: ' + escapeHtml(r.error) + '</div>'
+        }
+        btn.disabled = false
+        btn.innerHTML = '<span>✨</span><span>Gerar Temas</span>'
+      })
+      .catch(err => {
+        loadingDiv.classList.add('hidden')
+        contentDiv.innerHTML = '<div class="text-red-600 text-sm">Erro na requisição: ' + escapeHtml(err.message) + '</div>'
+        btn.disabled = false
+        btn.innerHTML = '<span>✨</span><span>Gerar Temas</span>'
+      })
+  }
+
+  // Search related keywords live
+  function searchRelatedKeywords() {
+    const input = document.getElementById('relatedSearchInput')
+    const query = input ? input.value.trim() : ''
+    if (!query) return
+
+    const btn = document.getElementById('relatedSearchBtn')
+    const resultDiv = document.getElementById('relatedSearchResult')
+    btn.disabled = true
+    btn.innerHTML = '<div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>'
+    resultDiv.classList.remove('hidden')
+    resultDiv.innerHTML = '<div class="text-center py-4 text-gray-400"><div class="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full inline-block"></div><p class="mt-2 text-sm">Buscando...</p></div>'
+
+    fetch('/api/related-keywords', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    })
+      .then(r => r.json())
+      .then(r => {
+        btn.disabled = false
+        btn.innerHTML = '<span>🔍</span><span>Buscar</span>'
+        if (!r.keywords || !r.keywords.length) {
+          resultDiv.innerHTML = '<div class="text-center py-4 text-gray-400 font-medium">Nenhuma keyword relacionada encontrada.</div>'
+          return
+        }
+        resultDiv.innerHTML = renderKeywordTable(r.keywords)
+      })
+      .catch(err => {
+        btn.disabled = false
+        btn.innerHTML = '<span>🔍</span><span>Buscar</span>'
+        resultDiv.innerHTML = '<div class="text-center py-4 text-red-500">Erro: ' + escapeHtml(err.message) + '</div>'
+      })
+  }
+
+  function renderKeywordTable(keywords) {
+    if (!keywords.length) return '<div class="text-center py-4 text-gray-400 font-medium">Nenhuma keyword encontrada.</div>'
+    const intentLabel = { informational: 'Informacional', commercial: 'Comercial', transactional: 'Transacional', navigational: 'Navegacional' }
+    const intentColors = { informational: 'bg-blue-50 text-blue-600', commercial: 'bg-purple-50 text-purple-600', transactional: 'bg-green-50 text-green-600', navigational: 'bg-orange-50 text-orange-600' }
+    return '<div class="overflow-x-auto"><table class="w-full text-xs border-collapse">' +
+      '<thead><tr class="bg-gray-50">' +
+      '<th class="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wide">Palavra-chave</th>' +
+      '<th class="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide">Volume</th>' +
+      '<th class="px-3 py-2 text-right font-semibold text-gray-500 uppercase tracking-wide">CPC</th>' +
+      '<th class="px-3 py-2 text-center font-semibold text-gray-500 uppercase tracking-wide">Intenção</th>' +
+      '<th class="px-3 py-2 text-center font-semibold text-gray-500 uppercase tracking-wide">Competição</th>' +
+      '</tr></thead><tbody>' +
+      keywords.map(k => {
+        const intentKey = (k.searchIntent || '').toLowerCase()
+        const compColor = k.competitionValue === 'HIGH' ? 'text-red-600 bg-red-50' : k.competitionValue === 'MEDIUM' ? 'text-yellow-600 bg-yellow-50' : k.competitionValue === 'LOW' ? 'text-green-600 bg-green-50' : 'text-gray-600 bg-gray-50'
+        const iColor = intentColors[intentKey] || 'bg-gray-50 text-gray-600'
+        const iDisplay = intentLabel[intentKey] || k.searchIntent || '-'
+        return '<tr class="border-t border-gray-100 hover:bg-gray-50">' +
+          '<td class="px-3 py-2 font-medium text-gray-900">' + escapeHtml(k.keyword) + '</td>' +
+          '<td class="px-3 py-2 text-right tabular-nums text-gray-700">' + (k.volume > 0 ? k.volume.toLocaleString() : '-') + '</td>' +
+          '<td class="px-3 py-2 text-right tabular-nums text-gray-700">' + (k.cpc > 0 ? '$' + k.cpc.toFixed(2) : '-') + '</td>' +
+          '<td class="px-3 py-2 text-center"><span class="' + iColor + ' px-2 py-0.5 rounded text-xs font-medium">' + iDisplay + '</span></td>' +
+          '<td class="px-3 py-2 text-center"><span class="' + compColor + ' px-2 py-0.5 rounded text-xs font-medium">' + (k.competitionValue || '-') + '</span></td>' +
+          '</tr>'
+      }).join('') +
+      '</tbody></table></div>'
+  }
+
   // Tab switching
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -484,6 +811,14 @@ body { font-family: 'Inter', sans-serif; }
       document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'))
       document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden')
     })
+  })
+
+  // Enter key on related search input
+  document.addEventListener('DOMContentLoaded', function() {
+    const input = document.getElementById('relatedSearchInput')
+    if (input) {
+      input.addEventListener('keydown', function(e) { if (e.key === 'Enter') searchRelatedKeywords() })
+    }
   })
 
   // Render findings

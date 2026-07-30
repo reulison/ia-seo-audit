@@ -21,4 +21,10 @@ export const config = {
   pagespeed: {
     apiKey: process.env.PAGE_SPEED_API_KEY || '',
   },
+  dataforseo: {
+    login: process.env.DATAFORSEO_LOGIN || '',
+    password: process.env.DATAFORSEO_PASSWORD || '',
+    limit: parseInt(process.env.DATAFORSEO_LIMIT || '10', 10),
+    maxQueries: parseInt(process.env.DATAFORSEO_MAX_QUERIES || '10', 10),
+  },
 }

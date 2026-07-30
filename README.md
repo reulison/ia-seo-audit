@@ -11,6 +11,8 @@ Auditoria técnica de SEO com inteligência artificial. Crawleia seu site, execu
 | **DeepSeek IA** | Análise em português do Brasil com DeepSeek, dividida em seções (Resumo Executivo, Problemas Críticos, SEO On-Page, Saúde Técnica, Conteúdo, Correções Priorizadas) |
 | **Google Search Console** | Importa dados reais de cliques, impressões, CTR e posição dos últimos 28 dias |
 | **PageSpeed Insights** | Scores Lighthouse (Performance, Acessibilidade, Boas Práticas, SEO) para mobile e desktop |
+| **Keywords (DataForSEO)** | Enriquece as top queries do GSC com volume de busca, CPC e nível de concorrência via Google Ads Search Volume API |
+| **Keywords Relacionadas (DataForSEO)** | Gera palavras-chave relacionadas a partir de uma semente com volume, CPC, intenção de busca e competição — busca ao vivo no dashboard |
 | **Dashboard interativo** | Servidor local com cards de score, gráficos de severidade, análise DeepSeek estruturada em cards com ícones, filtros e busca |
 | **Persistência automática** | Após cada auditoria o relatório completo é salvo em `data/last-report.json`. Reabra o dashboard sem re-auditar com `serve` |
 | **Correções automáticas** | Peça ao DeepSeek para gerar correções específicas para qualquer problema encontrado |
@@ -123,15 +125,21 @@ Quando ativo, o servidor local exibe:
 - **Achados** — Tabela interativa com busca, filtro por severidade e modal de detalhes com evidência, recomendação e correção
 - **Por Categoria** — Problemas agrupados por categoria
 - **Por Página** — Top páginas com mais problemas
+- **Aba Keywords** — Top queries do GSC enriquecidas com volume de busca, CPC e concorrência via DataForSEO (expansível)
+- **Aba Keywords Relacionadas** — Palavras-chave relacionadas via DataForSEO com busca ao vivo por qualquer semente
 
 ## Environment Variables
 
 | Variável | Obrigatório | Descrição |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | ✅ Sim | Sua chave da API DeepSeek |
-| `GOOGLE_APPLICATION_CREDENTIALS` | ✅ Sim | Caminho para o JSON da service account do Google Search Console |
-| `PAGE_SPEED_API_KEY` | ✅ Sim | Chave da API PageSpeed Insights (https://developers.google.com/speed/docs/insights/v5/get-started) |
-| `DEEPSEEK_MODEL` | ✅ Sim | Modelo DeepSeek (default: `deepseek-chat`) |
+| `GOOGLE_APPLICATION_CREDENTIALS` | ❌ Não | Caminho para o JSON da service account do Google Search Console |
+| `PAGE_SPEED_API_KEY` | ❌ Não | Chave da API PageSpeed Insights (https://developers.google.com/speed/docs/insights/v5/get-started) |
+| `DATAFORSEO_LOGIN` | ❌ Não | Login da API DataForSEO |
+| `DATAFORSEO_PASSWORD` | ❌ Não | Senha da API DataForSEO |
+| `DATAFORSEO_LIMIT` | ❌ Não | Máx. de keywords por consulta (default: `10`) |
+| `DATAFORSEO_MAX_QUERIES` | ❌ Não | Máx. de queries do GSC para enriquecer (default: `10`) |
+| `DEEPSEEK_MODEL` | ❌ Não | Modelo DeepSeek (default: `deepseek-chat`) |
 | `MAX_CRAWL_PAGES` | ❌ Não | Máximo de páginas por crawl (default: `1000`) |
 | `SAC_DATA_DIR` | ❌ Não | Diretório para dados (default: `./data`) |
 
@@ -139,7 +147,7 @@ Quando ativo, o servidor local exibe:
 
 O DeepSeek não utiliza RAG (Retrieval-Augmented Generation). Em vez disso, a aplicação usa **data aggregation + prompt engineering**:
 
-1. **Agregação**: os dados são coletados de 3 fontes distintas (crawler, Google Search Console e PageSpeed Insights) via chamadas de API determinísticas
+1. **Agregação**: os dados são coletados de 4 fontes (crawler, Google Search Console, PageSpeed Insights e DataForSEO) via chamadas de API determinísticas
 2. **Prompt estruturado**: todo o conteúdo é concatenado em um único prompt com seções fixas (Resumo Executivo, Problemas Críticos, SEO On-Page, Saúde Técnica, Conteúdo, Correções Priorizadas)
 3. **Análise completa**: o modelo recebe todos os dados de uma vez e gera o relatório em pt-BR
 
@@ -160,11 +168,13 @@ src/
 │   └── client.ts         # Cliente DeepSeek com prompts em pt-BR
 ├── gsc/
 │   └── client.ts         # Integração Google Search Console API
+├── kwrds/
+│   └── client.ts         # Integração DataForSEO (Search Volume + Related Keywords)
 ├── pagespeed/
 │   └── client.ts         # Integração PageSpeed Insights API
 ├── persist.ts           # Persistência do relatório em data/last-report.json
 ├── server/
-│   ├── index.ts          # Servidor HTTP (com endpoint /api/report)
+│   ├── index.ts          # Servidor HTTP (endpoints: /api/report, /api/topics, /api/related-keywords)
 │   └── dashboard.ts      # Geração do HTML do dashboard (Tailwind CSS via CDN)
 └── utils/
     └── index.ts          # Utilitários de formatação

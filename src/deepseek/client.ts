@@ -135,6 +135,27 @@ ${gscData ? `\nGSC DATA:\n${gscData.slice(0, 4000)}` : ''}
   ])
 }
 
+export async function generateArticleTopics(keywordsJson: string): Promise<string> {
+  const systemPrompt = `You are an SEO content strategist specializing in topic clustering and pillar page strategy.
+
+Based on the provided keywords and GSC performance data, suggest article topics in Brazilian Portuguese (pt-BR).
+
+For each topic, provide:
+- **Título**: um título otimizado para SEO (60 caracteres max)
+- **Descrição**: 2-3 frases explicando o que o artigo cobre
+- **Palavras-chave alvo**: as principais keywords a serem trabalhadas no artigo
+
+Group related topics into clusters. Prioritize topics based on search volume and commercial intent.
+Output in clean markdown with clear sections.`
+
+  const data = `Aqui estão os dados de keywords do GSC para o site:\n\n${keywordsJson}`
+
+  return chat([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: data },
+  ])
+}
+
 export async function suggestImprovements(
   url: string,
   pageContent: string

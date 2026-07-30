@@ -14,9 +14,10 @@ import {
 import { fetchGscData, formatGscSummary } from './gsc/client.js'
 import { runPageSpeed, formatPageSpeedSummary } from './pagespeed/client.js'
 import { formatReportMarkdown } from './utils/index.js'
-import { generateDashboard, generateDashboardFromFindings } from './server/dashboard.js'
+import { generateDashboard } from './server/dashboard.js'
 import { startServer, printServerInfo } from './server/index.js'
 import { AuditFinding, AuditReport } from './types.js'
+import { enrichGscWithSearchVolume, fetchMultipleRelatedKeywords } from './kwrds/client.js'
 import { config } from './config.js'
 import { saveReport, loadReport } from './persist.js'
 
@@ -77,14 +78,35 @@ program
       .join('\n')
 
     let gscSummary = ''
+    let gscData: Awaited<ReturnType<typeof fetchGscData>> = null
     if (config.gsc.credentials) {
       console.log(chalk.gray('  Fetching Google Search Console data...'))
-      const gscData = await fetchGscData(url)
+      gscData = await fetchGscData(url)
       if (gscData) {
         gscSummary = formatGscSummary(gscData)
         console.log(chalk.green(`  ✓ GSC: ${gscData.totalClicks.toLocaleString()} clicks, ${gscData.totalImpressions.toLocaleString()} impressions`))
       } else {
         console.log(chalk.yellow('  ⚠ GSC data unavailable — check credentials and site verification'))
+      }
+    }
+
+    let kwrdsData: AuditReport['kwrds'] = undefined
+    let dataforseoData: AuditReport['dataforseo'] = undefined
+
+    if (config.dataforseo.login && config.dataforseo.password && gscData) {
+      console.log(chalk.gray('  Fetching search volume from DataForSEO...'))
+      kwrdsData = await enrichGscWithSearchVolume(gscData)
+      if (kwrdsData?.length) {
+        const total = kwrdsData.reduce((s, q) => s + q.keywords.length, 0)
+        console.log(chalk.green(`  ✓ ${total} search volume results for ${kwrdsData.length} GSC queries`))
+      }
+
+      console.log(chalk.gray('  Fetching related keywords from DataForSEO...'))
+      const queryTexts = gscData.topQueries.slice(0, config.dataforseo.maxQueries).map((q) => q.query)
+      dataforseoData = await fetchMultipleRelatedKeywords(queryTexts)
+      if (dataforseoData?.length) {
+        const total = dataforseoData.reduce((s, r) => s + r.keywords.length, 0)
+        console.log(chalk.green(`  ✓ ${total} related keywords for ${dataforseoData.length} queries`))
       }
     }
 
@@ -199,6 +221,8 @@ program
       findings: prioritized,
       deepseekAnalysis: analysis,
       pagespeed: pagespeedScores,
+      kwrds: kwrdsData,
+      dataforseo: dataforseoData,
     }
 
     const savedPath = saveReport(auditReport)
@@ -420,9 +444,19 @@ program
       const crawlSummary = pages.map(p => `${p.url} | ${p.statusCode}`).join('\n')
 
       let gscSummary = ''
+      let gscData: Awaited<ReturnType<typeof fetchGscData>> = null
       if (config.gsc.credentials) {
-        const gscData = await fetchGscData(url)
+        gscData = await fetchGscData(url)
         if (gscData) gscSummary = formatGscSummary(gscData)
+      }
+
+      let kwrdsData: AuditReport['kwrds'] = undefined
+      let dataforseoData: AuditReport['dataforseo'] = undefined
+
+      if (config.dataforseo.login && config.dataforseo.password && gscData) {
+        kwrdsData = await enrichGscWithSearchVolume(gscData)
+        const queryTexts = gscData.topQueries.slice(0, config.dataforseo.maxQueries).map((q) => q.query)
+        dataforseoData = await fetchMultipleRelatedKeywords(queryTexts)
       }
 
       let pagespeedSummary = ''
@@ -458,6 +492,8 @@ program
         findings: prioritized,
         deepseekAnalysis: analysis,
         pagespeed: pagespeedScores,
+        kwrds: kwrdsData,
+        dataforseo: dataforseoData,
       }
 
       saveReport(report)

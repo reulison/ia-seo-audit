@@ -29,6 +29,30 @@ export interface AuditFinding {
   fix?: string
 }
 
+export interface KwrdsKeyword {
+  keyword: string
+  volume: number
+  cpc: number
+  searchIntent: string
+  competitionValue: string
+}
+
+export interface DataForSeoResult {
+  query: string
+  keywords: KwrdsKeyword[]
+}
+
+export interface KwrdsQueryData {
+  query: string
+  gsc: {
+    clicks: number
+    impressions: number
+    ctr: number
+    position: number
+  }
+  keywords: KwrdsKeyword[]
+}
+
 export interface AuditReport {
   url: string
   timestamp: string
@@ -46,6 +70,8 @@ export interface AuditReport {
     mobile: { performance: number; accessibility: number; 'best-practices': number; seo: number }
     desktop: { performance: number; accessibility: number; 'best-practices': number; seo: number }
   }
+  kwrds?: KwrdsQueryData[]
+  dataforseo?: DataForSeoResult[]
 }
 
 export interface GscQuery {
