@@ -133,10 +133,10 @@ Quando ativo, o servidor local exibe:
 | Variável | Obrigatório | Descrição |
 |---|---|---|
 | `DEEPSEEK_API_KEY` | ✅ Sim | Sua chave da API DeepSeek |
-| `GOOGLE_APPLICATION_CREDENTIALS` | ❌ Não | Caminho para o JSON da service account do Google Search Console |
-| `PAGE_SPEED_API_KEY` | ❌ Não | Chave da API PageSpeed Insights (https://developers.google.com/speed/docs/insights/v5/get-started) |
-| `DATAFORSEO_LOGIN` | ❌ Não | Login da API DataForSEO |
-| `DATAFORSEO_PASSWORD` | ❌ Não | Senha da API DataForSEO |
+| `GOOGLE_APPLICATION_CREDENTIALS` | ✅ Sim | Caminho para o JSON da service account do Google Search Console |
+| `PAGE_SPEED_API_KEY` | ✅ Sim | Chave da API PageSpeed Insights (https://developers.google.com/speed/docs/insights/v5/get-started) |
+| `DATAFORSEO_LOGIN` | ✅ Sim | Login da API DataForSEO |
+| `DATAFORSEO_PASSWORD` | ✅ Sim | Senha da API DataForSEO |
 | `DATAFORSEO_LIMIT` | ❌ Não | Máx. de keywords por consulta (default: `10`) |
 | `DATAFORSEO_MAX_QUERIES` | ❌ Não | Máx. de queries do GSC para enriquecer (default: `10`) |
 | `DEEPSEEK_MODEL` | ❌ Não | Modelo DeepSeek (default: `deepseek-chat`) |
@@ -147,7 +147,7 @@ Quando ativo, o servidor local exibe:
 
 O DeepSeek não utiliza RAG (Retrieval-Augmented Generation). Em vez disso, a aplicação usa **data aggregation + prompt engineering**:
 
-1. **Agregação**: os dados são coletados de 4 fontes (crawler, Google Search Console, PageSpeed Insights e DataForSEO) via chamadas de API determinísticas
+1. **Agregação**: os dados são coletados de 4 fontes (crawler, Google Search Console, PageSpeed Insights e DataForSEO) via chamadas de API
 2. **Prompt estruturado**: todo o conteúdo é concatenado em um único prompt com seções fixas (Resumo Executivo, Problemas Críticos, SEO On-Page, Saúde Técnica, Conteúdo, Correções Priorizadas)
 3. **Análise completa**: o modelo recebe todos os dados de uma vez e gera o relatório em pt-BR
 
