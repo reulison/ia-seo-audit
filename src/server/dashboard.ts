@@ -480,26 +480,6 @@ body { font-family: 'Inter', sans-serif; }
         </div>
       </div>`).join('')}
 
-      <!-- Generate article topics -->
-      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mt-4">
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <h4 class="font-bold text-gray-900">📝 Temas de Artigos</h4>
-            <p class="text-sm text-gray-400">Gere sugestões de artigos baseadas nas palavras-chave</p>
-          </div>
-          <button onclick="generateTopics('kwrds')" id="genTopicsBtn-kwrds" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
-            <span>✨</span>
-            <span>Gerar Temas</span>
-          </button>
-        </div>
-        <div id="topicsResult-kwrds" class="hidden">
-          <div class="flex items-center gap-2 text-sm text-gray-500 mb-3" id="topicsLoading-kwrds">
-            <div class="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-            <span>Gerando temas com DeepSeek...</span>
-          </div>
-          <div id="topicsContent-kwrds" class="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-strong:text-gray-900 prose-table:text-xs prose-table:border prose-table:border-gray-200 prose-th:bg-gray-50 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-1.5 prose-td:border prose-td:border-gray-200"></div>
-        </div>
-      </div>
     </div>` : ''}
 
     <!-- Tab: DataForSEO Keywords Relacionadas -->
@@ -582,14 +562,14 @@ body { font-family: 'Inter', sans-serif; }
         </div>
       </div>`).join('')}
 
-      <!-- Generate article topics -->
+      <!-- Generate article topics with Keyword Suggestions API -->
       <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mt-4">
         <div class="flex items-center justify-between mb-4">
           <div>
             <h4 class="font-bold text-gray-900">📝 Temas de Artigos</h4>
             <p class="text-sm text-gray-400">Gere sugestões de artigos baseadas nas keywords relacionadas</p>
           </div>
-          <button onclick="generateTopics('dataforseo')" id="genTopicsBtn-dataforseo" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+          <button onclick="generateTopics()" id="genTopicsBtn-dataforseo" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
             <span>✨</span>
             <span>Gerar Temas</span>
           </button>
@@ -597,9 +577,9 @@ body { font-family: 'Inter', sans-serif; }
         <div id="topicsResult-dataforseo" class="hidden">
           <div class="flex items-center gap-2 text-sm text-gray-500 mb-3" id="topicsLoading-dataforseo">
             <div class="animate-spin w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-            <span>Gerando temas com DeepSeek...</span>
+            <span>Buscando sugestões de keywords e gerando temas...</span>
           </div>
-          <div id="topicsContent-dataforseo" class="prose prose-sm max-w-none text-gray-700 prose-headings:text-gray-900 prose-strong:text-gray-900 prose-table:text-xs prose-table:border prose-table:border-gray-200 prose-th:bg-gray-50 prose-th:px-3 prose-th:py-2 prose-td:px-3 prose-td:py-1.5 prose-td:border prose-td:border-gray-200"></div>
+          <div id="topicsContent-dataforseo"></div>
         </div>
       </div>
     </div>` : ''}
@@ -690,13 +670,12 @@ body { font-family: 'Inter', sans-serif; }
     return div.innerHTML
   }
 
-  // Generate article topics from keyword data
-  function generateTopics(source) {
-    const btn = document.getElementById('genTopicsBtn-' + source)
-    const resultDiv = document.getElementById('topicsResult-' + source)
-    const contentDiv = document.getElementById('topicsContent-' + source)
-    const loadingDiv = document.getElementById('topicsLoading-' + source)
-    const data = source === 'dataforseo' ? dataforseo : kwrds
+  // Generate article topics using Keyword Suggestions API
+  function generateTopics() {
+    const btn = document.getElementById('genTopicsBtn-dataforseo')
+    const resultDiv = document.getElementById('topicsResult-dataforseo')
+    const contentDiv = document.getElementById('topicsContent-dataforseo')
+    const loadingDiv = document.getElementById('topicsLoading-dataforseo')
 
     btn.disabled = true
     btn.innerHTML = '<div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div><span>Gerando...</span>'
@@ -704,30 +683,20 @@ body { font-family: 'Inter', sans-serif; }
     loadingDiv.classList.remove('hidden')
     contentDiv.innerHTML = ''
 
+    const keywords = dataforseo.flatMap(r => r.keywords.map(k => k.keyword))
+
     fetch('/api/topics', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ keywords }),
     })
       .then(r => r.json())
       .then(r => {
         loadingDiv.classList.add('hidden')
-        if (r.success) {
-          const html = r.result.split('\\n').map(line => {
-            const safe = escapeHtml(line)
-            if (line.startsWith('#')) {
-              const level = line.match(/^#+/)[0].length
-              const text = escapeHtml(line.replace(/^#+\s*/, ''))
-              const size = level === 1 ? 'text-xl font-bold mt-4 mb-2' : level === 2 ? 'text-lg font-bold mt-3 mb-1' : 'text-base font-semibold mt-2 mb-1'
-              return '<div class="' + size + '">' + text + '</div>'
-            }
-            if (line.startsWith('- ')) return '<li class="ml-4 text-sm leading-relaxed">' + escapeHtml(line.slice(2)) + '</li>'
-            if (line.trim() === '') return '<br>'
-            return '<p class="text-sm leading-relaxed">' + safe + '</p>'
-          }).join('\\n')
-          contentDiv.innerHTML = html
+        if (r.success && r.topics) {
+          contentDiv.innerHTML = renderTopicCards(r.topics)
         } else {
-          contentDiv.innerHTML = '<div class="text-red-600 text-sm">Erro: ' + escapeHtml(r.error) + '</div>'
+          contentDiv.innerHTML = '<div class="text-red-600 text-sm">Erro: ' + escapeHtml(r.error || 'Falha ao gerar temas') + '</div>'
         }
         btn.disabled = false
         btn.innerHTML = '<span>✨</span><span>Gerar Temas</span>'
@@ -738,6 +707,33 @@ body { font-family: 'Inter', sans-serif; }
         btn.disabled = false
         btn.innerHTML = '<span>✨</span><span>Gerar Temas</span>'
       })
+  }
+
+  function renderTopicCards(topics) {
+    if (!topics || !topics.length) return '<div class="text-center py-8 text-gray-400 font-medium">Nenhum tema gerado.</div>'
+    const clusterColors = ['border-l-blue-500 bg-blue-50', 'border-l-purple-500 bg-purple-50', 'border-l-green-500 bg-green-50', 'border-l-orange-500 bg-orange-50', 'border-l-pink-500 bg-pink-50', 'border-l-teal-500 bg-teal-50']
+    let currentCluster = ''
+    let clusterIdx = -1
+    let html = ''
+    for (const topic of topics) {
+      if (topic.cluster && topic.cluster !== currentCluster) {
+        currentCluster = topic.cluster
+        clusterIdx = (clusterIdx + 1) % clusterColors.length
+        html += '<div class="mt-6 mb-3 flex items-center gap-2"><span class="text-lg">📂</span><h3 class="font-bold text-base text-gray-800">' + escapeHtml(topic.cluster) + '</h3></div>'
+      }
+      html += '<div class="' + clusterColors[clusterIdx] + ' border-l-4 rounded-xl p-4 mb-3">'
+      html += '<h4 class="font-bold text-gray-900 text-sm">' + escapeHtml(topic.title) + '</h4>'
+      html += '<p class="text-xs text-gray-600 mt-1 leading-relaxed">' + escapeHtml(topic.description) + '</p>'
+      if (topic.targetKeywords && topic.targetKeywords.length) {
+        html += '<div class="flex flex-wrap gap-1.5 mt-2">' + topic.targetKeywords.map(kw => '<span class="bg-white/70 text-gray-600 px-2 py-0.5 rounded text-xs border border-gray-200">' + escapeHtml(kw) + '</span>').join('') + '</div>'
+      }
+      if (topic.priority) {
+        const pColor = topic.priority === 'alto' ? 'bg-red-100 text-red-700' : topic.priority === 'médio' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'
+        html += '<div class="mt-2"><span class="' + pColor + ' px-2 py-0.5 rounded text-xs font-medium">Prioridade: ' + topic.priority.charAt(0).toUpperCase() + topic.priority.slice(1) + '</span></div>'
+      }
+      html += '</div>'
+    }
+    return html
   }
 
   // Search related keywords live

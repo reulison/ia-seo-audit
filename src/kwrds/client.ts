@@ -145,6 +145,72 @@ export async function fetchRelatedKeywords(query: string): Promise<KwrdsKeyword[
   }
 }
 
+// --- DataForSEO Keyword Suggestions API ---
+// POST /v3/dataforseo_labs/google/keyword_suggestions/live
+// Returns keyword suggestions with volume, CPC, competition, intent
+
+interface SuggestionItem {
+  keyword?: string
+  keyword_info?: {
+    search_volume?: number
+    cpc?: number
+    competition_level?: string
+  }
+  search_intent_info?: {
+    main_intent?: string
+  }
+}
+
+interface SuggestionTask {
+  status_code: number
+  result?: {
+    items?: SuggestionItem[]
+  }[]
+}
+
+export async function fetchKeywordSuggestions(query: string): Promise<KwrdsKeyword[]> {
+  if (!query.trim()) return []
+  const auth = basicAuth()
+
+  try {
+    const res = await fetch('https://api.dataforseo.com/v3/dataforseo_labs/google/keyword_suggestions/live', {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([{
+        keyword: query,
+        location_code: 2840,
+        limit: config.dataforseo.limit,
+      }]),
+      signal: AbortSignal.timeout(15000),
+    })
+
+    if (!res.ok) {
+      console.error(`  DataForSEO Keyword Suggestions API error (${res.status}) for "${query}"`)
+      return []
+    }
+
+    const data = await res.json()
+    const task: SuggestionTask | undefined = data.tasks?.[0]
+    if (task?.status_code !== 20000) return []
+
+    const items = task.result?.[0]?.items || []
+    return items
+      .filter((item) => item.keyword)
+      .map((item) => ({
+        keyword: item.keyword!,
+        volume: item.keyword_info?.search_volume ?? 0,
+        cpc: item.keyword_info?.cpc ?? 0,
+        searchIntent: item.search_intent_info?.main_intent || '',
+        competitionValue: item.keyword_info?.competition_level || '',
+      }))
+      .slice(0, config.dataforseo.limit)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`  DataForSEO Keyword Suggestions API error for "${query}": ${msg}`)
+    return []
+  }
+}
+
 // --- Batch enrichment functions ---
 
 export async function enrichGscWithSearchVolume(gscData: GscSummary | null): Promise<KwrdsQueryData[]> {

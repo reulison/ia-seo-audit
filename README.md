@@ -12,7 +12,7 @@ Auditoria técnica de SEO com inteligência artificial. Crawleia seu site, execu
 | **Google Search Console** | Importa dados reais de cliques, impressões, CTR e posição dos últimos 28 dias |
 | **PageSpeed Insights** | Scores Lighthouse (Performance, Acessibilidade, Boas Práticas, SEO) para mobile e desktop |
 | **Keywords (DataForSEO)** | Enriquece as top queries do GSC com volume de busca, CPC e nível de concorrência via Google Ads Search Volume API |
-| **Keywords Relacionadas (DataForSEO)** | Gera palavras-chave relacionadas a partir de uma semente com volume, CPC, intenção de busca e competição — busca ao vivo no dashboard |
+| **Keywords Relacionadas (DataForSEO)** | Gera palavras-chave relacionadas a partir de uma semente com volume, CPC, intenção de busca e competição — busca ao vivo no dashboard. Gere temas de artigos em HTML estruturado com DeepSeek |
 | **Dashboard interativo** | Servidor local com cards de score, gráficos de severidade, análise DeepSeek estruturada em cards com ícones, filtros e busca |
 | **Persistência automática** | Após cada auditoria o relatório completo é salvo em `data/last-report.json`. Reabra o dashboard sem re-auditar com `serve` |
 | **Correções automáticas** | Peça ao DeepSeek para gerar correções específicas para qualquer problema encontrado |
@@ -126,7 +126,7 @@ Quando ativo, o servidor local exibe:
 - **Por Categoria** — Problemas agrupados por categoria
 - **Por Página** — Top páginas com mais problemas
 - **Aba Keywords** — Top queries do GSC enriquecidas com volume de busca, CPC e concorrência via DataForSEO (expansível)
-- **Aba Keywords Relacionadas** — Palavras-chave relacionadas via DataForSEO com busca ao vivo por qualquer semente
+- **Aba Keywords Relacionadas** — Palavras-chave relacionadas via DataForSEO com busca ao vivo por qualquer semente. Botão **Gerar Temas** que enriquece as keywords com a API Related Keywords e gera cards HTML estruturados (título, descrição, palavras-alvo, cluster, prioridade) via DeepSeek
 
 ## Environment Variables
 

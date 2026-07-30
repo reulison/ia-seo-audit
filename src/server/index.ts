@@ -1,7 +1,8 @@
 import http from 'http'
 import url from 'url'
+import { config } from '../config.js'
 import { loadReport } from '../persist.js'
-import { generateArticleTopics } from '../deepseek/client.js'
+import { generateArticleTopics, parseTopicsJson } from '../deepseek/client.js'
 import { fetchRelatedKeywords } from '../kwrds/client.js'
 
 interface ServerOptions {
@@ -65,9 +66,26 @@ export function startServer(options: ServerOptions): Promise<http.Server> {
         req.on('data', (chunk) => (body += chunk))
         req.on('end', async () => {
           try {
-            const result = await generateArticleTopics(body)
+            const { keywords } = JSON.parse(body)
+            if (!keywords || !keywords.length) {
+              res.writeHead(400, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ success: false, error: 'Nenhuma keyword fornecida.' }))
+              return
+            }
+
+            // Enrich each keyword with Related Keywords API
+            const relatedMap = new Map<string, string[]>()
+            for (const kw of keywords.slice(0, config.dataforseo.maxQueries)) {
+              const related = await fetchRelatedKeywords(kw)
+              relatedMap.set(kw, related.map((s) => `${s.keyword} (vol:${s.volume}, cpc:${s.cpc}, intent:${s.searchIntent}, comp:${s.competitionValue})`))
+            }
+
+            const enrichedData = JSON.stringify([...relatedMap.entries()].map(([kw, sugs]) => ({ keyword: kw, suggestions: sugs })))
+            const raw = await generateArticleTopics(enrichedData)
+            const topics = parseTopicsJson(raw)
+
             res.writeHead(200, { 'Content-Type': 'application/json' })
-            res.end(JSON.stringify({ success: true, result }))
+            res.end(JSON.stringify({ success: true, topics }))
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
             res.writeHead(500, { 'Content-Type': 'application/json' })

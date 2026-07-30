@@ -138,22 +138,34 @@ ${gscData ? `\nGSC DATA:\n${gscData.slice(0, 4000)}` : ''}
 export async function generateArticleTopics(keywordsJson: string): Promise<string> {
   const systemPrompt = `You are an SEO content strategist specializing in topic clustering and pillar page strategy.
 
-Based on the provided keywords and GSC performance data, suggest article topics in Brazilian Portuguese (pt-BR).
+Based on the provided keywords and their search volume data, suggest article topics in Brazilian Portuguese (pt-BR).
 
-For each topic, provide:
-- **Título**: um título otimizado para SEO (60 caracteres max)
-- **Descrição**: 2-3 frases explicando o que o artigo cobre
-- **Palavras-chave alvo**: as principais keywords a serem trabalhadas no artigo
+Return a JSON array of topic objects (no markdown, no code fences). Each object must have these fields:
+- "title": article title optimized for SEO (max 60 chars)
+- "description": 2-3 sentence summary of what the article covers
+- "targetKeywords": array of 3-5 keywords to target in the article
+- "cluster": cluster name for grouping related topics
+- "priority": "alto", "médio", or "baixo"
 
-Group related topics into clusters. Prioritize topics based on search volume and commercial intent.
-Output in clean markdown with clear sections.`
+Group related topics into clusters. Prioritize topics based on search volume and commercial intent.`
 
-  const data = `Aqui estão os dados de keywords do GSC para o site:\n\n${keywordsJson}`
+  const data = `Generate article topics from these keywords:\n\n${keywordsJson}`
 
   return chat([
     { role: 'system', content: systemPrompt },
     { role: 'user', content: data },
   ])
+}
+
+export function parseTopicsJson(raw: string): { title: string; description: string; targetKeywords: string[]; cluster: string; priority: string }[] {
+  const cleaned = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  try {
+    const parsed = JSON.parse(cleaned)
+    if (Array.isArray(parsed)) return parsed
+    return []
+  } catch {
+    return []
+  }
 }
 
 export async function suggestImprovements(
