@@ -38,7 +38,7 @@ Score = max(5, 100 − (12×críticos + 6×altos + 2×médios + 1×baixos))
 ```bash
 # Clone e instale
 git clone <seu-repo>
-cd deepseek-seo-audit
+cd ia-seo-audit
 npm install
 
 # Configure sua chave DeepSeek
