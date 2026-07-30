@@ -180,10 +180,10 @@ src/
     └── index.ts          # Utilitários de formatação
 ```
 
-### Visulizar
+### Visualizar
 
-- [SEO Audit](/public/seo-audit.pdf "SEO Audit")
-- [SEO Keywords](/public/seo-keywords.pdf "SEO Keywords")
+- [SEO Audit](https://github.com/reulison/ia-seo-audit/blob/main/public/seo-audit.pdf "SEO Audit")
+- [SEO Keywords](https://github.com/reulison/ia-seo-audit/blob/main/public/seo-keywords.pdf "SEO Keywords")
 
 ## License
 
