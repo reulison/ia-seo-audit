@@ -1,5 +1,6 @@
 import { AuditFinding, AuditReport } from '../types.js'
 import { marked } from 'marked'
+import { config } from '../config.js'
 
 function renderDeepSeekAnalysis(markdown: string): string {
   if (!markdown || markdown.startsWith('*')) {
@@ -125,6 +126,19 @@ export function generateDashboard(report: AuditReport): string {
 
   const kwrdsEncoded = encodeURIComponent(JSON.stringify(report.kwrds || []))
   const dataforseoEncoded = encodeURIComponent(JSON.stringify(report.dataforseo || []))
+
+  const domainHostname = (() => {
+    try {
+      return new URL(url).hostname
+    } catch {
+      return url
+    }
+  })()
+  const llmDefaultKeyword = String(config.dataforseo.llmMentions.keyword)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -276,6 +290,7 @@ body { font-family: 'Inter', sans-serif; }
       <button class="tab-btn px-5 py-2.5 rounded-lg font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="deepseek">🤖 IA Análise</button>
       ${report.kwrds?.length ? '<button class="tab-btn px-5 py-2.5 rounded-lg font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="kwrds">📊 Keywords</button>' : ''}
       ${report.dataforseo?.length ? '<button class="tab-btn px-5 py-2.5 rounded-lg font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="dataforseo">🔑 Keywords Relacionadas</button>' : ''}
+      <button class="tab-btn px-5 py-2.5 rounded-lg font-medium text-sm text-gray-500 hover:text-gray-700" data-tab="llm-mentions">🗣️ Citações por LLMs</button>
     </div>
 
     <!-- Tab: Findings -->
@@ -583,6 +598,29 @@ body { font-family: 'Inter', sans-serif; }
         </div>
       </div>
     </div>` : ''}
+
+    <!-- Tab: Citações por LLMs -->
+    <div id="tab-llm-mentions" class="tab-content hidden">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-2xl">🗣️</span>
+        <div>
+          <h3 class="font-bold text-lg text-gray-900">Citações por LLMs</h3>
+          <p class="text-sm text-gray-400">Menções do domínio auditado e de uma keyword em respostas de IA (ChatGPT / Google AI Overview) via DataForSEO</p>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+        <div class="flex gap-3">
+          <input id="llmKeywordInput" type="text" value="${llmDefaultKeyword}" placeholder="Keyword para buscar..." class="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <button onclick="searchLlmMentions()" id="llmSearchBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors flex items-center gap-2">
+            <span>🔍</span>
+            <span>Buscar</span>
+          </button>
+        </div>
+        <div class="text-xs text-gray-400 mt-2">Domínio pesquisado: <span class="font-medium text-gray-600">${domainHostname}</span></div>
+        <div id="llmMentionsResult" class="hidden mt-4"></div>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -799,6 +837,97 @@ body { font-family: 'Inter', sans-serif; }
       '</tbody></table></div>'
   }
 
+  // Search LLM mentions live (domain + keyword)
+  let llmTabOpened = false
+  function searchLlmMentions() {
+    const input = document.getElementById('llmKeywordInput')
+    const keyword = input ? input.value.trim() : ''
+    const btn = document.getElementById('llmSearchBtn')
+    const resultDiv = document.getElementById('llmMentionsResult')
+
+    btn.disabled = true
+    btn.innerHTML = '<div class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div><span>Buscando...</span>'
+    resultDiv.classList.remove('hidden')
+    resultDiv.innerHTML = '<div class="text-center py-8 text-gray-400"><div class="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full inline-block"></div><p class="mt-2 text-sm">Buscando menções nas respostas de IA (pode levar até 2 minutos)...</p></div>'
+
+    fetch('/api/llm-mentions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword }),
+    })
+      .then(r => r.json())
+      .then(r => {
+        btn.disabled = false
+        btn.innerHTML = '<span>🔍</span><span>Buscar</span>'
+        if (r.error) {
+          resultDiv.innerHTML = '<div class="text-center py-6 text-red-500 font-medium">Erro: ' + escapeHtml(r.error) + '</div>'
+          return
+        }
+        resultDiv.innerHTML = renderLlmMentions(r)
+      })
+      .catch(err => {
+        btn.disabled = false
+        btn.innerHTML = '<span>🔍</span><span>Buscar</span>'
+        resultDiv.innerHTML = '<div class="text-center py-6 text-red-500 font-medium">Erro: ' + escapeHtml(err.message) + '</div>'
+      })
+  }
+
+  function renderLlmMentions(data) {
+    const mentions = data.mentions || []
+    if (!mentions.length) {
+      return '<div class="text-center py-8 text-gray-400 font-medium">Nenhuma menção encontrada para o domínio/keyword pesquisados.</div>'
+    }
+
+    const summary = '<div class="flex items-center gap-2 flex-wrap mb-4 text-sm">' +
+      '<span class="bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium">Domínio: ' + escapeHtml(data.domain || '-') + '</span>' +
+      '<span class="bg-purple-50 text-purple-600 px-3 py-1 rounded-full font-medium">Keyword: ' + escapeHtml(data.keyword || '-') + '</span>' +
+      '<span class="bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium">' + mentions.length + ' menção(ões)</span>' +
+      (data.totalCount > mentions.length ? '<span class="bg-gray-100 text-gray-400 px-3 py-1 rounded-full font-medium">Total: ' + data.totalCount + '</span>' : '') +
+      '</div>'
+
+    return summary + mentions.map(m => {
+      const platformLabel = m.platform === 'chat_gpt' ? 'ChatGPT' : m.platform === 'google' ? 'Google AI Overview' : (m.platform || 'IA')
+      const platformColor = m.platform === 'chat_gpt' ? 'bg-green-50 text-green-600' : m.platform === 'google' ? 'bg-blue-50 text-blue-600' : 'bg-gray-50 text-gray-600'
+      return '<div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">' +
+        '<div class="flex items-start justify-between gap-3 mb-3 flex-wrap">' +
+          '<div class="flex items-start gap-2 flex-1 min-w-0">' +
+            '<span class="text-lg">🤖</span>' +
+            '<h4 class="font-bold text-gray-900 text-sm leading-snug">' + escapeHtml(m.question || 'Pergunta') + '</h4>' +
+          '</div>' +
+          '<div class="flex items-center gap-2 flex-wrap">' +
+            '<span class="' + platformColor + ' px-2 py-0.5 rounded text-xs font-medium">' + platformLabel + '</span>' +
+            (m.ai_search_volume != null ? '<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-medium">Vol. IA: ' + m.ai_search_volume.toLocaleString() + '</span>' : '') +
+            (m.is_web_search_based ? '<span class="bg-yellow-50 text-yellow-600 px-2 py-0.5 rounded text-xs font-medium">Web search</span>' : '') +
+          '</div>' +
+        '</div>' +
+        (m.answer ? '<div class="text-xs text-gray-700 bg-gray-50 rounded-xl p-4 mb-3 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">' + escapeHtml(m.answer) + '</div>' : '') +
+        renderLlmSources(m.sources, data.domain) +
+        (m.first_response_at ? '<div class="text-xs text-gray-400 mt-3">Primeira resposta: ' + escapeHtml(m.first_response_at) + '</div>' : '') +
+      '</div>'
+    }).join('')
+  }
+
+  function renderLlmSources(sources, domain) {
+    if (!sources || !sources.length) return ''
+    return '<div class="border-t border-gray-100 pt-3 mt-3">' +
+      '<div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Fontes citadas</div>' +
+      '<div class="space-y-2">' +
+      sources.map(s => {
+        const isOwned = domain && s.domain && (s.domain === domain || s.domain.endsWith('.' + domain))
+        const domainText = s.domain || s.source_name || s.url || ''
+        return '<div class="flex items-start gap-2 ' + (isOwned ? 'bg-green-50 border border-green-100 rounded-lg p-2' : '') + '">' +
+          '<span class="text-gray-400 mt-0.5">📄</span>' +
+          '<div class="flex-1 min-w-0">' +
+            (s.title ? '<div class="text-xs font-medium text-gray-900">' + escapeHtml(s.title) + (isOwned ? ' <span class="bg-green-100 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-semibold">SEU DOMÍNIO</span>' : '') + '</div>' : '') +
+            (domainText ? '<div class="text-xs text-gray-500 truncate">' + escapeHtml(domainText) + '</div>' : '') +
+            (s.url ? '<a href="' + s.url + '" target="_blank" rel="noopener" class="text-xs text-blue-600 hover:underline truncate block">' + escapeHtml(s.url) + '</a>' : '') +
+            (s.snippet ? '<div class="text-xs text-gray-600 mt-1 leading-relaxed">' + escapeHtml(s.snippet) + '</div>' : '') +
+          '</div>' +
+        '</div>'
+      }).join('') +
+      '</div></div>'
+  }
+
   // Tab switching
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -806,6 +935,10 @@ body { font-family: 'Inter', sans-serif; }
       btn.classList.add('bg-white', 'shadow-sm'); btn.classList.remove('text-gray-500')
       document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'))
       document.getElementById('tab-' + btn.dataset.tab).classList.remove('hidden')
+      if (btn.dataset.tab === 'llm-mentions' && !llmTabOpened) {
+        llmTabOpened = true
+        searchLlmMentions()
+      }
     })
   })
 
@@ -814,6 +947,10 @@ body { font-family: 'Inter', sans-serif; }
     const input = document.getElementById('relatedSearchInput')
     if (input) {
       input.addEventListener('keydown', function(e) { if (e.key === 'Enter') searchRelatedKeywords() })
+    }
+    const llmInput = document.getElementById('llmKeywordInput')
+    if (llmInput) {
+      llmInput.addEventListener('keydown', function(e) { if (e.key === 'Enter') searchLlmMentions() })
     }
   })
 

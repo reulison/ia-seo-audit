@@ -3,7 +3,7 @@ import url from 'url'
 import { config } from '../config.js'
 import { loadReport } from '../persist.js'
 import { generateArticleTopics, parseTopicsJson } from '../deepseek/client.js'
-import { fetchRelatedKeywords } from '../kwrds/client.js'
+import { fetchRelatedKeywords, fetchLlmMentions } from '../kwrds/client.js'
 
 interface ServerOptions {
   port: number
@@ -56,6 +56,34 @@ export function startServer(options: ServerOptions): Promise<http.Server> {
             const msg = err instanceof Error ? err.message : String(err)
             res.writeHead(500, { 'Content-Type': 'application/json' })
             res.end(JSON.stringify({ keywords: [], error: msg }))
+          }
+        })
+        return
+      }
+
+      if (pathname === '/api/llm-mentions' && req.method === 'POST') {
+        let body = ''
+        req.on('data', (chunk) => (body += chunk))
+        req.on('end', async () => {
+          try {
+            const { keyword } = JSON.parse(body)
+            const report = loadReport()
+            let domain = ''
+            if (report?.url) {
+              try {
+                domain = new URL(report.url).hostname.replace(/^www\./, '')
+              } catch {
+                // keep domain empty
+              }
+            }
+            const kw = (typeof keyword === 'string' && keyword.trim()) || config.dataforseo.llmMentions.keyword
+            const result = await fetchLlmMentions(domain, kw)
+            res.writeHead(200, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify(result))
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ domain: '', keyword: '', totalCount: 0, mentions: [], error: msg }))
           }
         })
         return

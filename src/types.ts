@@ -42,6 +42,37 @@ export interface DataForSeoResult {
   keywords: KwrdsKeyword[]
 }
 
+export interface LlmSource {
+  snippet: string | null
+  source_name: string | null
+  rank: number | null
+  title: string | null
+  domain: string | null
+  url: string | null
+  publication_date: string | null
+}
+
+export interface LlmMention {
+  platform: string
+  model_name: string
+  location_code: number
+  language_code: string
+  question: string
+  answer: string
+  sources: LlmSource[] | null
+  ai_search_volume: number | null
+  first_response_at: string | null
+  last_response_at: string | null
+  is_web_search_based: boolean | null
+}
+
+export interface LlmMentionsResult {
+  domain: string
+  keyword: string
+  totalCount: number
+  mentions: LlmMention[]
+}
+
 export interface KwrdsQueryData {
   query: string
   gsc: {

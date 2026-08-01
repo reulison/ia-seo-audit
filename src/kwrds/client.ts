@@ -1,5 +1,5 @@
 import { config } from '../config.js'
-import { KwrdsKeyword, KwrdsQueryData, DataForSeoResult } from '../types.js'
+import { KwrdsKeyword, KwrdsQueryData, DataForSeoResult, LlmMention, LlmMentionsResult } from '../types.js'
 import { GscSummary } from '../gsc/client.js'
 
 function basicAuth(): string {
@@ -250,4 +250,105 @@ export async function fetchMultipleRelatedKeywords(queries: string[]): Promise<D
   }
 
   return results
+}
+
+// --- DataForSEO LLM Mentions Search Mentions API ---
+// POST /v3/ai_optimization/llm_mentions/search_mentions/live
+// Returns mentions of a domain/keyword across AI search platforms (ChatGPT, Google AI Overview)
+
+interface LlmSourceItem {
+  snippet?: string | null
+  source_name?: string | null
+  rank?: number | null
+  title?: string | null
+  domain?: string | null
+  url?: string | null
+  publication_date?: string | null
+}
+
+interface LlmMentionItem {
+  platform?: string
+  model_name?: string
+  location_code?: number
+  language_code?: string
+  question?: string
+  answer?: string
+  sources?: LlmSourceItem[] | null
+  ai_search_volume?: number | null
+  first_response_at?: string | null
+  last_response_at?: string | null
+  is_web_search_based?: boolean | null
+}
+
+interface LlmMentionsTask {
+  status_code: number
+  result?: {
+    total_count?: number
+    items?: LlmMentionItem[]
+  }[]
+}
+
+export async function fetchLlmMentions(domain: string, keyword: string): Promise<LlmMentionsResult> {
+  const target: Record<string, unknown>[] = []
+  if (domain) target.push({ domain, search_filter: 'include' })
+  if (keyword.trim()) target.push({ keyword: keyword.trim(), search_filter: 'include' })
+
+  if (!target.length) return { domain, keyword, totalCount: 0, mentions: [] }
+  const auth = basicAuth()
+
+  try {
+    const res = await fetch('https://api.dataforseo.com/v3/ai_optimization/llm_mentions/search_mentions/live', {
+      method: 'POST',
+      headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify([{
+        target,
+        platform: config.dataforseo.llmMentions.platform || undefined,
+        location_code: config.dataforseo.llmMentions.locationCode,
+        language_code: config.dataforseo.llmMentions.languageCode,
+        limit: config.dataforseo.llmMentions.limit,
+      }]),
+      signal: AbortSignal.timeout(120000),
+    })
+
+    if (!res.ok) {
+      console.error(`  DataForSEO LLM Mentions API error (${res.status})`)
+      return { domain, keyword, totalCount: 0, mentions: [] }
+    }
+
+    const data = await res.json()
+    const task: LlmMentionsTask | undefined = data.tasks?.[0]
+    if (task?.status_code !== 20000) {
+      console.error(`  DataForSEO LLM Mentions API error (${task?.status_code})`)
+      return { domain, keyword, totalCount: 0, mentions: [] }
+    }
+
+    const result = task.result?.[0]
+    const mentions: LlmMention[] = (result?.items || []).map((item) => ({
+      platform: item.platform || '',
+      model_name: item.model_name || '',
+      location_code: item.location_code ?? 0,
+      language_code: item.language_code || '',
+      question: item.question || '',
+      answer: item.answer || '',
+      sources: item.sources ? item.sources.map((s) => ({
+        snippet: s.snippet ?? null,
+        source_name: s.source_name ?? null,
+        rank: s.rank ?? null,
+        title: s.title ?? null,
+        domain: s.domain ?? null,
+        url: s.url ?? null,
+        publication_date: s.publication_date ?? null,
+      })) : null,
+      ai_search_volume: item.ai_search_volume ?? null,
+      first_response_at: item.first_response_at ?? null,
+      last_response_at: item.last_response_at ?? null,
+      is_web_search_based: item.is_web_search_based ?? null,
+    }))
+
+    return { domain, keyword, totalCount: result?.total_count ?? mentions.length, mentions }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(`  DataForSEO LLM Mentions API error: ${msg}`)
+    return { domain, keyword, totalCount: 0, mentions: [] }
+  }
 }

@@ -26,5 +26,12 @@ export const config = {
     password: process.env.DATAFORSEO_PASSWORD || '',
     limit: parseInt(process.env.DATAFORSEO_LIMIT || '10', 10),
     maxQueries: parseInt(process.env.DATAFORSEO_MAX_QUERIES || '10', 10),
+    llmMentions: {
+      keyword: process.env.DATAFORSEO_LLM_KEYWORD || 'reulison',
+      limit: parseInt(process.env.DATAFORSEO_LLM_LIMIT || '50', 10),
+      platform: process.env.DATAFORSEO_LLM_PLATFORM || '',
+      locationCode: parseInt(process.env.DATAFORSEO_LLM_LOCATION_CODE || '2840', 10),
+      languageCode: process.env.DATAFORSEO_LLM_LANGUAGE_CODE || 'en',
+    },
   },
 }

@@ -13,6 +13,7 @@ Auditoria técnica de SEO com inteligência artificial. Crawleia seu site, execu
 | **PageSpeed Insights** | Scores Lighthouse (Performance, Acessibilidade, Boas Práticas, SEO) para mobile e desktop |
 | **Keywords (DataForSEO)** | Enriquece as top queries do GSC com volume de busca, CPC e nível de concorrência via Google Ads Search Volume API |
 | **Keywords Relacionadas (DataForSEO)** | Gera palavras-chave relacionadas a partir de uma semente com volume, CPC, intenção de busca e competição — busca ao vivo no dashboard. Gere temas de artigos em HTML estruturado com DeepSeek |
+| **Citações por LLMs (DataForSEO)** | Busca menções do domínio auditado e de uma keyword (default `reulison` no config.ts) em respostas de IA (ChatGPT / Google AI Overview) — busca ao vivo no dashboard |
 | **Dashboard interativo** | Servidor local com cards de score, gráficos de severidade, análise DeepSeek estruturada em cards com ícones, filtros e busca |
 | **Persistência automática** | Após cada auditoria o relatório completo é salvo em `data/last-report.json`. Reabra o dashboard sem re-auditar com `serve` |
 | **Correções automáticas** | Peça ao DeepSeek para gerar correções específicas para qualquer problema encontrado |
@@ -127,6 +128,7 @@ Quando ativo, o servidor local exibe:
 - **Por Página** — Top páginas com mais problemas
 - **Aba Keywords** — Top queries do GSC enriquecidas com volume de busca, CPC e concorrência via DataForSEO (expansível)
 - **Aba Keywords Relacionadas** — Palavras-chave relacionadas via DataForSEO com busca ao vivo por qualquer semente. Botão **Gerar Temas** que enriquece as keywords com a API Related Keywords e gera cards HTML estruturados (título, descrição, palavras-alvo, cluster, prioridade) via DeepSeek
+- **Aba Citações por LLMs** — Menções do domínio auditado e de uma keyword (definida em `config.ts`, default `reulison`) em respostas de IA (ChatGPT / Google AI Overview) via DataForSEO LLM Mentions. Busca ao vivo, com perguntas, respostas e fontes citadas — destacando quando o domínio auditado é citado como fonte
 
 ## Environment Variables
 
@@ -139,6 +141,11 @@ Quando ativo, o servidor local exibe:
 | `DATAFORSEO_PASSWORD` | ✅ Sim | Senha da API DataForSEO |
 | `DATAFORSEO_LIMIT` | ❌ Não | Máx. de keywords por consulta (default: `10`) |
 | `DATAFORSEO_MAX_QUERIES` | ❌ Não | Máx. de queries do GSC para enriquecer (default: `10`) |
+| `DATAFORSEO_LLM_KEYWORD` | ❌ Não | Keyword buscada nas citações por LLMs junto ao domínio (default: `reulison`) |
+| `DATAFORSEO_LLM_LIMIT` | ❌ Não | Máx. de resultados por busca de citações por LLMs (default: `50`) |
+| `DATAFORSEO_LLM_PLATFORM` | ❌ Não | Plataforma de IA para citações (`chat_gpt`, `google` ou vazio para ambas) |
+| `DATAFORSEO_LLM_LOCATION_CODE` | ❌ Não | Código de localização das buscas de IA (default: `2840`) |
+| `DATAFORSEO_LLM_LANGUAGE_CODE` | ❌ Não | Código de idioma das buscas de IA (default: `en`) |
 | `DEEPSEEK_MODEL` | ❌ Não | Modelo DeepSeek (default: `deepseek-chat`) |
 | `MAX_CRAWL_PAGES` | ❌ Não | Máximo de páginas por crawl (default: `1000`) |
 | `SAC_DATA_DIR` | ❌ Não | Diretório para dados (default: `./data`) |
@@ -174,7 +181,7 @@ src/
 │   └── client.ts         # Integração PageSpeed Insights API
 ├── persist.ts           # Persistência do relatório em data/last-report.json
 ├── server/
-│   ├── index.ts          # Servidor HTTP (endpoints: /api/report, /api/topics, /api/related-keywords)
+│   ├── index.ts          # Servidor HTTP (endpoints: /api/report, /api/topics, /api/related-keywords, /api/llm-mentions)
 │   └── dashboard.ts      # Geração do HTML do dashboard (Tailwind CSS via CDN)
 └── utils/
     └── index.ts          # Utilitários de formatação
